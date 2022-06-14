@@ -171,6 +171,13 @@ x-tx-manager-def:
           #generating the two config flavors
           cat <<EOF > $${DDIR}/tessera-config-09.json
           {
+            "encryptor":{
+              "type":"NACL",
+              "properties":{
+                
+              }
+
+            },
             "useWhiteList": false,
             "jdbc": {
               "username": "sa",
