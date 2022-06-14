@@ -256,7 +256,10 @@ x-tx-manager-def-node1:
               "app":"ThirdParty",
               "enabled": true,
               "serverAddress": "http://$$(hostname -i):9080",
-              "communicationType" : "REST"
+              "communicationType" : "REST",
+              "sslConfig": {
+                "tls": "STRICT"
+              },
             },
             {
               "app":"Q2T",
@@ -269,7 +272,7 @@ x-tx-manager-def-node1:
               "enabled": true,
               "serverAddress": "http://$$(hostname -i):9000",
               "sslConfig": {
-                "tls": "OFF"
+                "tls": "STRICT"
               },
               "communicationType" : "REST"
             }

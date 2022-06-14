@@ -10,7 +10,7 @@ version: "3.6"
 x-quorum-def:
   &quorum-def
   restart: "on-failure"
-  image: "${QUORUM_DOCKER_IMAGE:-quorumengineering/quorum:21.7.1}"
+  image: "${QUORUM_DOCKER_IMAGE:-quorumengineering/quorum:22.1.1}"
   expose:
     - "21000"
     - "50400"
@@ -60,8 +60,8 @@ x-quorum-def:
       fi
       NETWORK_ID=$$(cat $${GENESIS_FILE} | grep chainId | awk -F " " '{print $$2}' | awk -F "," '{print $$1}')
       GETH_ARGS_raft="--raft --raftport 50400"
-      GETH_ARGS_istanbul="--emitcheckpoints --istanbul.blockperiod 1 --mine --minerthreads 1 --syncmode full"
-      GETH_ARGS_qbft="--emitcheckpoints --istanbul.blockperiod 1 --mine --minerthreads 1 --syncmode full"
+      GETH_ARGS_istanbul="--emitcheckpoints --istanbul.blockperiod 1 --mine --miner.threads 1 --syncmode full"
+      GETH_ARGS_qbft="--emitcheckpoints --istanbul.blockperiod 1 --mine --miner.threads 1 --syncmode full"
       geth --datadir $${DDIR} init $${GENESIS_FILE}
       geth \
         --identity node$${NODE_ID}-${QUORUM_CONSENSUS:-istanbul} \
@@ -82,13 +82,46 @@ x-quorum-def:
         --nousb \
         --password /examples/passwords.txt \
         ${QUORUM_GETH_ARGS:-} $${GETH_ARGS_${QUORUM_CONSENSUS:-istanbul}}
+      if [[ "$${NODE_ID}" == "1" ]]; then 
+        echo found node1;
+        sleep 60
+        echo "before kill" >> /tmp/antz.log
+        killall -HUP geth
+        echo "after kill" >> /tmp/antz.log
+        geth removedb --datadir $${DDIR}
+        geth --datadir $${DDIR} init $${GENESIS_FILE}
+        echo "i am starting" >> /tmp/antz.log
+        geth \
+        --identity node$${NODE_ID}-${QUORUM_CONSENSUS:-istanbul} \
+        --datadir $${DDIR} \
+        --permissioned \
+        --nodiscover \
+        --verbosity 5 \
+        --networkid $${NETWORK_ID} \
+        --rpc \
+        --rpccorsdomain "*" \
+        --rpcvhosts "*" \
+        --rpcaddr 0.0.0.0 \
+        --rpcport 8545 \
+        --rpcapi admin,eth,debug,miner,net,shh,txpool,personal,web3,quorum,$${CONSENSUS_RPC_API} \
+        --port 21000 \
+        --unlock 0 \
+        --allow-insecure-unlock \
+        --nousb \
+        --password /examples/passwords.txt \
+        ${QUORUM_GETH_ARGS:-} $${GETH_ARGS_${QUORUM_CONSENSUS:-istanbul}}
+        echo "started" >> /tmp/antz.log
+      else 
+         echo "antz not found" >> /tmp/antz.log
+      fi
+      
 x-tx-manager-def:
   &tx-manager-def
-  image: "${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:21.7.2}"
+  image: "${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.3}"
   expose:
     - "9000"
     - "9080"
-  restart: "no"
+  restart: "on-failure"
   healthcheck:
     test: ["CMD-SHELL", "[ -S /qdata/tm/tm.ipc ] || exit 1"]
     interval: 3s
@@ -99,6 +132,9 @@ x-tx-manager-def:
     - /bin/sh
     - -c
     - |
+      apt-get update
+      apt-get -y install procps
+
       if [ "$${PRIVATE_CONFIG}" == "ignore" ]; then
         /bin/true
         exit 0
@@ -106,7 +142,7 @@ x-tx-manager-def:
       DDIR=/qdata/tm
       rm -rf $${DDIR}
       mkdir -p $${DDIR}
-      DOCKER_IMAGE="${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:21.7}"
+      DOCKER_IMAGE="${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.3}"
       TX_MANAGER=$$(echo $${DOCKER_IMAGE} | sed 's/^.*\/\(.*\):.*$$/\1/g')
       echo "TxManager: $${TX_MANAGER}"
       case $${TX_MANAGER}
@@ -146,8 +182,20 @@ x-tx-manager-def:
             {
               "app":"ThirdParty",
               "enabled": true,
-              "serverAddress": "http://$$(hostname -i):9080",
-              "communicationType" : "REST"
+              "serverAddress": "https://$$(hostname -i):9080",
+              "communicationType" : "REST",
+              "sslConfig": {
+                "tls" : "STRICT",
+                "generateKeyStoreIfNotExisted" : "true",
+                "serverKeyStore" : "server-keystore",
+                "serverKeyStorePassword" : "tessera",
+                "serverTrustMode" : "TOFU",
+                "clientKeyStore" : "client-keystore",
+                "clientKeyStorePassword" : "tessera",
+                "clientTrustMode" : "TOFU",
+                "knownClientsFile" : "knownClients",
+                "knownServersFile" : "knownServers"
+              }
             },
             {
               "app":"Q2T",
@@ -158,34 +206,43 @@ x-tx-manager-def:
             {
               "app":"P2P",
               "enabled": true,
-              "serverAddress": "http://$$(hostname -i):9000",
+              "serverAddress": "https://$$(hostname -i):9000",
               "sslConfig": {
-                "tls": "OFF"
+                "tls" : "STRICT",
+                "generateKeyStoreIfNotExisted" : "true",
+                "serverKeyStore" : "server-keystore",
+                "serverKeyStorePassword" : "tessera",
+                "serverTrustMode" : "TOFU",
+                "clientKeyStore" : "client-keystore",
+                "clientKeyStorePassword" : "tessera",
+                "clientTrustMode" : "TOFU",
+                "knownClientsFile" : "knownClients",
+                "knownServersFile" : "knownServers"
               },
               "communicationType" : "REST"
             }
             ],
             "peer": [
                {
-                   "url": "http://txmanager1:9000"
+                   "url": "https://txmanager1:9000"
                },
                {
-                   "url": "http://txmanager2:9000"
+                   "url": "https://txmanager2:9000"
                },
                {
-                   "url": "http://txmanager3:9000"
+                   "url": "https://txmanager3:9000"
                },
                {
-                   "url": "http://txmanager4:9000"
+                   "url": "https://txmanager4:9000"
                },
                {
-                   "url": "http://txmanager5:9000"
+                   "url": "https://txmanager5:9000"
                },
                {
-                   "url": "http://txmanager6:9000"
+                   "url": "https://txmanager6:9000"
                },
                {
-                   "url": "http://txmanager7:9000"
+                   "url": "https://txmanager7:9000"
                }
             ],
             "keys": {
@@ -202,9 +259,9 @@ x-tx-manager-def:
       EOF
           cat $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           if [ -f "/tessera/tessera-app.jar" ]; then
-              java -Xms128M -Xmx128M -jar /tessera/tessera-app.jar -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
+              java -Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log -jar /tessera/tessera-app.jar -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           else
-              export JAVA_OPTS="-Xms128M -Xmx128M"
+              export JAVA_OPTS="-Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log"
               /tessera/bin/tessera -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           fi
           ;;
