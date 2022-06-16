@@ -7,6 +7,7 @@
 # e.g.: QUORUM_TX_MANAGER_DOCKER_IMAGE=quorumengineering/constellation:0.3.2 docker-compose up -d
 # To use Remix, set QUORUM_GETH_ARGS="--rpccorsdomain https://remix.ethereum.org"
 version: "3.6"
+
 x-quorum-def:
   &quorum-def
   restart: "on-failure"
@@ -41,14 +42,16 @@ x-quorum-def:
       done
       fi
       DDIR=/qdata/dd
-      rm -rf $${DDIR}
-      mkdir -p $${DDIR}/keystore
-      mkdir -p $${DDIR}/geth
-      cp /examples/raft/nodekey$${NODE_ID} $${DDIR}/geth/nodekey
-      cp /examples/keys/key$${NODE_ID} $${DDIR}/keystore/
-      cp /examples/disallowed-nodes.json $${DDIR}/
+      #if [[ ! -d "$${DDIR}" ]]; then
+        rm -rf $${DDIR}
+        mkdir -p $${DDIR}/keystore
+        mkdir -p $${DDIR}/geth
+      #fi
+      cp -f /examples/raft/nodekey$${NODE_ID} $${DDIR}/geth/nodekey
+      cp -f /examples/keys/key$${NODE_ID} $${DDIR}/keystore/
+      cp -f /examples/disallowed-nodes.json $${DDIR}/
       cat /examples/permissioned-nodes.json | sed 's/^\(.*\)@.*\?\(.*\)raftport=5040\([0-9]\)\(.*\)$$/\1@172.16.239.1\3:21000?discport=0\&raftport=50400\4/g' > $${DDIR}/static-nodes.json
-      cp $${DDIR}/static-nodes.json $${DDIR}/permissioned-nodes.json
+      cp -f $${DDIR}/static-nodes.json $${DDIR}/permissioned-nodes.json
       cat $${DDIR}/static-nodes.json
       GENESIS_FILE="/examples/istanbul-genesis.json"
       CONSENSUS_RPC_API="istanbul"
@@ -82,38 +85,6 @@ x-quorum-def:
         --nousb \
         --password /examples/passwords.txt \
         ${QUORUM_GETH_ARGS:-} $${GETH_ARGS_${QUORUM_CONSENSUS:-istanbul}}
-      if [[ "$${NODE_ID}" == "1" ]]; then 
-        echo found node1;
-        sleep 60
-        echo "before kill" >> /tmp/antz.log
-        killall -HUP geth
-        echo "after kill" >> /tmp/antz.log
-        geth removedb --datadir $${DDIR}
-        geth --datadir $${DDIR} init $${GENESIS_FILE}
-        echo "i am starting" >> /tmp/antz.log
-        geth \
-        --identity node$${NODE_ID}-${QUORUM_CONSENSUS:-istanbul} \
-        --datadir $${DDIR} \
-        --permissioned \
-        --nodiscover \
-        --verbosity 5 \
-        --networkid $${NETWORK_ID} \
-        --rpc \
-        --rpccorsdomain "*" \
-        --rpcvhosts "*" \
-        --rpcaddr 0.0.0.0 \
-        --rpcport 8545 \
-        --rpcapi admin,eth,debug,miner,net,shh,txpool,personal,web3,quorum,$${CONSENSUS_RPC_API} \
-        --port 21000 \
-        --unlock 0 \
-        --allow-insecure-unlock \
-        --nousb \
-        --password /examples/passwords.txt \
-        ${QUORUM_GETH_ARGS:-} $${GETH_ARGS_${QUORUM_CONSENSUS:-istanbul}}
-        echo "started" >> /tmp/antz.log
-      else 
-         echo "antz not found" >> /tmp/antz.log
-      fi
       
 x-tx-manager-def:
   &tx-manager-def
@@ -135,13 +106,18 @@ x-tx-manager-def:
       apt-get update
       apt-get -y install procps
 
+      curl https://downloads.mariadb.com/Connectors/java/connector-java-2.7.3/mariadb-java-client-2.7.3.jar -o /tessera/lib/mariadb-java-client-2.7.3.jar
+      chmod 755 /tessera/lib/mariadb-java-client-2.7.3.jar
       if [ "$${PRIVATE_CONFIG}" == "ignore" ]; then
         /bin/true
         exit 0
       fi
       DDIR=/qdata/tm
+      #if [[ ! -d "$${DDIR}" ]]; then
       rm -rf $${DDIR}
       mkdir -p $${DDIR}
+      #fi
+      
       DOCKER_IMAGE="${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.3}"
       TX_MANAGER=$$(echo $${DOCKER_IMAGE} | sed 's/^.*\/\(.*\):.*$$/\1/g')
       echo "TxManager: $${TX_MANAGER}"
@@ -174,15 +150,15 @@ x-tx-manager-def:
             "encryptor":{
               "type":"NACL",
               "properties":{
-                
+
               }
 
             },
             "useWhiteList": false,
             "jdbc": {
-              "username": "sa",
-              "password": "",
-              "url": "jdbc:h2:./$${DDIR}/db;MODE=Oracle;TRACE_LEVEL_SYSTEM_OUT=0",
+              "username": "root",
+              "password": "S3cret",
+              "url": "jdbc:mariadb://mariadb$${NODE_ID}:330$${NODE_ID}/tessera?allowMultiQueries=true",
               "autoCreateTables": true
             },
             "serverConfigs":[
@@ -265,10 +241,10 @@ x-tx-manager-def:
           }
       EOF
           cat $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
-          if [ -f "/tessera/tessera-app.jar" ]; then
-              java -Xms1024M -Xmx1024M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log -jar /tessera/tessera-app.jar -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
+          if [ -f "/tessera/tessera.jar" ]; then
+              java -Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib com.quorum.tessera.Launcher -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           else
-              export JAVA_OPTS="-Xms1024M -Xmx1024M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log"
+              export JAVA_OPTS="-Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/tmp/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib"
               /tessera/bin/tessera -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           fi
           ;;
@@ -278,7 +254,7 @@ x-tx-manager-def:
             --url=http://$$(hostname -i):9000/ \
             --port=9000 \
             --socket=$${DDIR}/tm.ipc \
-            --othernodes=http://172.16.239.101:9000/,http://172.16.239.102:9000/,http://172.16.239.103:9000/,http://172.16.239.104:9000/,http://172.16.239.105:9000/ \
+            --othernodes=https://172.16.239.101:9000/,https://172.16.239.102:9000/,https://172.16.239.103:9000/,https://172.16.239.104:9000/,https://172.16.239.105:9000/ \
             --publickeys=/examples/keys/tm$${NODE_ID}.pub \
             --privatekeys=/examples/keys/tm$${NODE_ID}.key \
             --storage=$${DDIR} \
@@ -313,13 +289,32 @@ x-cakeshop-def:
       java -Xms128M -Xmx128M -Dspring.config.additional-location=file:/qdata/cakeshop/local/ -Dcakeshop.config.dir=/qdata/cakeshop -jar /cakeshop/cakeshop.war
       ;;
 services:
+  mariadb1:
+    image: mariadb:10.7
+    hostname: mariadb1
+    ports:
+      - 3301:3301
+    volumes:
+      - ./dockerData/vol1/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3301
+    expose:
+      - 3301
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.41
   node1:
     << : *quorum-def
     hostname: node1
     ports:
       - "22000:8545"
     volumes:
-      - vol1:/qdata
+      - ./dockerData/vol1:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager1
@@ -335,21 +330,42 @@ services:
     ports:
       - "9081:9080"
     volumes:
-      - vol1:/qdata
+      - ./dockerData/vol1:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb1
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.101
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=1
+  mariadb2:
+    image: mariadb:10.7
+    hostname: mariadb2
+    ports:
+      - 3302:3302
+    volumes:
+      - ./dockerData/vol2/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3302
+    expose:
+      - 3302
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.42
   node2:
     << : *quorum-def
     hostname: node2
     ports:
       - "22001:8545"
     volumes:
-      - vol2:/qdata
+      - ./dockerData/vol2:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager2
@@ -365,21 +381,42 @@ services:
     ports:
       - "9082:9080"
     volumes:
-      - vol2:/qdata
+      - ./dockerData/vol2:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb2
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.102
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=2
+  mariadb3:
+    image: mariadb:10.7
+    hostname: mariadb3
+    ports:
+      - 3303:3303
+    volumes:
+      - ./dockerData/vol3/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3303
+    expose:
+      - 3303
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.43
   node3:
     << : *quorum-def
     hostname: node3
     ports:
       - "22002:8545"
     volumes:
-      - vol3:/qdata
+      - ./dockerData/vol3:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager3
@@ -395,21 +432,42 @@ services:
     ports:
       - "9083:9080"
     volumes:
-      - vol3:/qdata
+      - ./dockerData/vol3:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb3
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.103
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=3
+  mariadb4:
+    image: mariadb:10.7
+    hostname: mariadb4
+    ports:
+      - 3304:3304
+    volumes:
+      - ./dockerData/vol4/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3304
+    expose:
+      - 3304
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.44
   node4:
     << : *quorum-def
     hostname: node4
     ports:
       - "22003:8545"
     volumes:
-      - vol4:/qdata
+      - ./dockerData/vol4:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager4
@@ -425,21 +483,42 @@ services:
     ports:
       - "9084:9080"
     volumes:
-      - vol4:/qdata
+      - ./dockerData/vol4:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb4
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.104
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=4
+  mariadb5:
+    image: mariadb:10.7
+    hostname: mariadb5
+    ports:
+      - 3305:3305
+    volumes:
+      - ./dockerData/vol5/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3305
+    expose:
+      - 3305
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.45
   node5:
     << : *quorum-def
     hostname: node5
     ports:
       - "22004:8545"
     volumes:
-      - vol5:/qdata
+      - ./dockerData/vol5:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager5
@@ -455,21 +534,42 @@ services:
     ports:
       - "9085:9080"
     volumes:
-      - vol5:/qdata
+      - ./dockerData/vol5:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb5
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.105
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=5
+  mariadb6:
+    image: mariadb:10.7
+    hostname: mariadb6
+    ports:
+      - 3306:3306
+    volumes:
+      - ./dockerData/vol6/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3306
+    expose:
+      - 3306
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.46
   node6:
     << : *quorum-def
     hostname: node6
     ports:
       - "22005:8545"
     volumes:
-      - vol6:/qdata
+      - ./dockerData/vol6:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager6
@@ -485,21 +585,42 @@ services:
     ports:
       - "9086:9080"
     volumes:
-      - vol6:/qdata
+      - ./dockerData/vol6:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb6
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.106
     environment:
       - PRIVATE_CONFIG=${PRIVATE_CONFIG:-/qdata/tm/tm.ipc}
       - NODE_ID=6
+  mariadb7:
+    image: mariadb:10.7
+    hostname: mariadb7
+    ports:
+      - 3307:3307
+    volumes:
+      - ./dockerData/vol7/mariadb:/var/lib/mysql:rw
+      - ./runSQL:/docker-entrypoint-initdb.d:ro
+    environment:
+      - MYSQL_ROOT_PASSWORD=S3cret
+      - MYSQL_PASSWORD=An0thrS3crt
+      - MYSQL_USER=tesseradbuser
+      - MYSQL_DATABASE=tessera
+      - MYSQL_TCP_PORT=3307
+    expose:
+      - 3307
+    networks:
+      quorum-examples-net:
+        ipv4_address: 172.16.239.47
   node7:
     << : *quorum-def
     hostname: node7
     ports:
       - "22006:8545"
     volumes:
-      - vol7:/qdata
+      - ./dockerData/vol7:/qdata:rw
       - ./examples/7nodes:/examples:ro
     depends_on:
       - txmanager7
@@ -515,8 +636,10 @@ services:
     ports:
       - "9087:9080"
     volumes:
-      - vol7:/qdata
+      - ./dockerData/vol7:/qdata:rw
       - ./examples/7nodes:/examples:ro
+    depends_on:
+      - mariadb7
     networks:
       quorum-examples-net:
         ipv4_address: 172.16.239.107
