@@ -12,7 +12,7 @@ services:
     image: mariadb:10.7
     hostname: mariadb
     ports:
-      - 3306:3306
+      - 3301:3301
     volumes:
       - ./mariadb:/var/lib/mysql:rw
       - ./runSQL:/docker-entrypoint-initdb.d:ro
@@ -23,7 +23,7 @@ services:
       - MYSQL_DATABASE=tessera
       - MYSQL_TCP_PORT=3301
     expose:
-      - 3306
+      - 3301
     networks:
       mariadb-net:
         ipv4_address: 172.16.238.41

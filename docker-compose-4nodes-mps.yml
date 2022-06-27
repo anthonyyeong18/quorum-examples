@@ -351,10 +351,10 @@ x-tx-manager-def-node1:
         constellation)
           echo "socket=\"$${DDIR}/tm.ipc\"\npublickeys=[\"/examples/keys/tm$${NODE_ID}.pub\"]\n" > $${DDIR}/tm.conf
           constellation-node \
-            --url=http://$$(hostname -i):9000/ \
+            --url=https://$$(hostname -i):9000/ \
             --port=9000 \
             --socket=$${DDIR}/tm.ipc \
-            --othernodes=http://172.16.239.101:9000/,http://172.16.239.102:9000/,http://172.16.239.103:9000/,http://172.16.239.104:9000/,http://172.16.239.105:9000/ \
+            --othernodes=https://172.16.239.101:9000/,https://172.16.239.102:9000/,https://172.16.239.103:9000/,https://172.16.239.104:9000/,https://172.16.239.105:9000/ \
             --publickeys=/examples/keys/tm$${NODE_ID}.pub \
             --privatekeys=/examples/keys/tm$${NODE_ID}.key \
             --storage=$${DDIR} \
