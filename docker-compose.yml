@@ -250,9 +250,9 @@ x-tx-manager-def:
       EOF
           cat $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           if [ -f "/tessera/tessera.jar" ]; then
-              java -Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib com.quorum.tessera.Launcher -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
+              java -Xms512M -Xmx512M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib com.quorum.tessera.Launcher -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           else
-              export JAVA_OPTS="-Xms128M -Xmx128M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib"
+              export JAVA_OPTS="-Xms512M -Xmx512M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib"
               /tessera/bin/tessera -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           fi
           ;;
