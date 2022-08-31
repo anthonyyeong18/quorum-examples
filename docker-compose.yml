@@ -88,7 +88,7 @@ x-quorum-def:
       
 x-tx-manager-def:
   &tx-manager-def
-  image: "${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.4}"
+  image: "${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.7}"
   expose:
     - "9000"
     - "9080"
@@ -118,7 +118,7 @@ x-tx-manager-def:
       mkdir -p $${DDIR}
       #fi
       
-      DOCKER_IMAGE="${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.4}"
+      DOCKER_IMAGE="${QUORUM_TX_MANAGER_DOCKER_IMAGE:-quorumengineering/tessera:22.1.7}"
       TX_MANAGER=$$(echo $${DOCKER_IMAGE} | sed 's/^.*\/\(.*\):.*$$/\1/g')
       echo "TxManager: $${TX_MANAGER}"
       case $${TX_MANAGER}
@@ -250,9 +250,9 @@ x-tx-manager-def:
       EOF
           cat $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           if [ -f "/tessera/tessera.jar" ]; then
-              java -Xms512M -Xmx512M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib com.quorum.tessera.Launcher -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
+              java -Xms512M -Xmx512M -Xlog:gc* -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib com.quorum.tessera.Launcher -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           else
-              export JAVA_OPTS="-Xms512M -Xmx512M -XX:+PrintGCDetails -Xloggc:/qdata/tm/gc.log -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib"
+              export JAVA_OPTS="-Xms512M -Xmx512M -Xlog:gc* -cp .:/tessera/lib/mariadb-java-client-2.7.3.jar:/tessera/lib"
               /tessera/bin/tessera -configfile $${DDIR}/tessera-config$${TESSERA_CONFIG_TYPE}.json
           fi
           ;;
